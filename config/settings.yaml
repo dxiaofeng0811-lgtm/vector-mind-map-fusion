@@ -1,0 +1,63 @@
+# Vector-Mind Map-Fusion 全局配置
+
+# ===== 路径配置 =====
+paths:
+  # OpenClaw 会话目录
+  sessions_dir: "~/.openclaw/agents/main/sessions"
+
+  # Neural Memory 数据库
+  brain_db: "~/.local/share/neural-memory/brains.db"
+
+  # 数据层
+  l2a_dir: "memory/layers/l2a"
+  l2_dir: "memory/layers/l2"
+  hnsw_dir: "memory/layers/hnsw"
+  infinitydb_dir: "memory/layers/infinitydb"
+
+# ===== Ollama 配置 =====
+ollama:
+  base_url: "http://localhost:11434"
+  model: "bge-m3"
+  batch_size: 20
+  timeout_sec: 30
+  max_retries: 3
+
+# ===== L1 配置 =====
+l1:
+  max_chunk_chars: 250
+  overlap_chars: 50
+  cosine_threshold: 0.85
+  max_content_length: 5000
+  ttl_days: 7
+
+# ===== L2 配置 =====
+l2:
+  window_size: 200
+  overlap: 100
+  sqlite_batch_size: 200
+  max_chunks_per_run: 5000
+  # Type 协同阈值
+  cosine_thresholds:
+    boundary: 0.85
+    default: 0.90
+  hnsw_threshold: 0.95
+
+# ===== L3 配置 =====
+l3:
+  schema_threshold: 5  # session ≥5 chunks 生成 schema
+  schema_priority: 4
+  sqlite_batch_size: 200
+  hnsw_batch_size: 500
+  max_elements: 10000
+
+# ===== 定时任务（Asia/Shanghai）=====
+cron:
+  l1_l2: "30 0 * * *"      # 每天 00:30
+  l3: "0 3 */2 * *"         # 每两天 03:00
+
+# ===== 召回配置 =====
+recall:
+  max_spread_hops: 3
+  activation_threshold: 0.3
+  diminishing_returns_enabled: true
+  diminishing_returns_threshold: 0.15
