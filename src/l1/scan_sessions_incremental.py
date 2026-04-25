@@ -29,16 +29,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+
+# 项目根目录（向上推导）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 # 配置
 SESSIONS_DIR = os.path.expanduser("~/.openclaw/agents/main/sessions")
-STATE_FILE = "/workspace/fusion/memory/_state/scan_sessions_incremental.json"
+STATE_FILE = str(PROJECT_ROOT / "memory" / "_state" / "scan_sessions_incremental.json")
 MAX_CONTENT_LENGTH = 5000
 
 # 7天滚动 TTL
 TTL_DAYS = 7
 
 # 保护性写入临时文件（crash 可恢复）
-RAW_CHUNKS_TMP_FILE = "/workspace/fusion/memory/_state/l1_raw_chunks_tmp.jsonl"
+RAW_CHUNKS_TMP_FILE = str(PROJECT_ROOT / "memory" / "_state" / "l1_raw_chunks_tmp.jsonl")
 
 
 class ByteOffsetScanner:

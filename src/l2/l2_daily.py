@@ -24,12 +24,19 @@ import hashlib
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# 项目根目录（向上推导）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 from collections import defaultdict
 from typing import Optional
 
+
+# 项目根目录（向上推导）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 # 配置
-L2A_DIR = Path("/workspace/fusion/memory/layers/l2a")
-L2_DIR = Path("/workspace/fusion/memory/layers/l2")
+L2A_DIR = PROJECT_ROOT / "memory" / "layers" / "l2a"
+L2_DIR = PROJECT_ROOT / "memory" / "layers" / "l2"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "bge-m3")
 VECTOR_DIM = 1024

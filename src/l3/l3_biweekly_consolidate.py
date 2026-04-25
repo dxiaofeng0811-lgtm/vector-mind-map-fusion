@@ -26,10 +26,13 @@ from pathlib import Path
 from collections import defaultdict, Counter
 from typing import Optional
 
+
+# 项目根目录（向上推导）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
 # 配置
-L2_DIR = Path("/workspace/fusion/memory/layers/l2")
-HNSW_DIR = Path("/workspace/fusion/memory/layers/hnsw")
-INFINITYDB_DIR = Path("/workspace/fusion/memory/layers/infinitydb")
+L2_DIR = PROJECT_ROOT / "memory" / "layers" / "l2"
+HNSW_DIR = PROJECT_ROOT / "memory" / "layers" / "hnsw"
+INFINITYDB_DIR = PROJECT_ROOT / "memory" / "layers" / "infinitydb"
 BRAIN_DB_DIR = os.environ.get("NEURALMEMORY_DIR", os.path.expanduser("~/.local/share/neural-memory"))
 BRAIN_DB_PATH = os.path.join(BRAIN_DB_DIR, "brains.db")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")

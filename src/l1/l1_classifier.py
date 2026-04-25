@@ -30,10 +30,13 @@ from pathlib import Path
 from typing import Optional
 import math
 
+# 项目根目录（向上推导）
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+
 # ============================================================
 # 配置
 # ============================================================
-L2A_DIR = Path("/workspace/fusion/memory/layers/l2a")
+L2A_DIR = PROJECT_ROOT / "memory" / "layers" / "l2a"
 OLLAMA_BASE_URL = "http://localhost:11434"
 OLLAMA_MODEL = "bge-m3"
 OLLAMA_BATCH_SIZE = 20
