@@ -53,11 +53,11 @@ def main():
                 print(f"[L1 Cron] 恢复完成: {new_count} 新增, {drop_count} 过滤")
                 date_str = datetime.now().strftime("%Y-%m-%d")
                 save_to_l2a(processed, date_str)
+                if os.path.exists(RAW_CHUNKS_TMP_FILE):
+                    os.remove(RAW_CHUNKS_TMP_FILE)
+                    print(f"[L1 Cron] 清理 stale tmp")
             else:
                 print(f"[L1 Cron] 恢复完成: 0 新增")
-
-            os.remove(RAW_CHUNKS_TMP_FILE)
-            print(f"[L1 Cron] 清理 stale tmp")
         else:
             print("[L1 Cron] 无新 chunks")
 
