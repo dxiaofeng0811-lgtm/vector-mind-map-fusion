@@ -1,0 +1,2 @@
+{"id": "803716f2875a695f", "session_id": "1b8572ba-6f79-4934-a2d2-743a038835a4", "content": "在 recall 里加两条并行的搜索路径这个需要在写入时更改什么吗？", "byte_offset": 5074823, "timestamp": "2026-04-26T11:16:17.804340+00:00", "source": "user_message", "_scan_filter_reason": "ok"}
+{"id": "4ea4b90d881c5a31", "session_id": "1b8572ba-6f79-4934-a2d2-743a038835a4", "content": "那如果双写就像你之前预测的，如果有一方写入失败呢？你这个并行搜索还有用吗？", "byte_offset": 5088692, "timestamp": "2026-04-26T11:16:17.805033+00:00", "source": "user_message", "_scan_filter_reason": "ok"}
