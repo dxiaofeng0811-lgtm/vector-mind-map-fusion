@@ -177,6 +177,9 @@ class L3Processor:
         self.infinitydb = InfinityDBLite(str(INFINITYDB_DIR))
         self._pending_neurons: list[dict] = []
         self._pending_relations: list[dict] = []
+        # cost tracker stats
+        self._ollama_calls = 0
+        self._tokens_approx = 0
 
     def write_chunks(self, chunks: list[dict], inferred_relations: list[dict]) -> dict:
         """
@@ -204,6 +207,8 @@ class L3Processor:
                 vector = chunk.get("vector", [])
                 if not vector:
                     vectors = self.encoder.encode_batch([content])
+                    self._ollama_calls += 1
+                    self._tokens_approx += len(content) * 2  # 估算
                     vector = vectors[0] if vectors else []
 
                 # 零向量跳过
@@ -226,6 +231,8 @@ class L3Processor:
             # SCHEMA 生成
             schema = generate_schema_neuron(session_chunks, self.encoder)
             if schema:
+                self._ollama_calls += 1
+                self._tokens_approx += len(schema["content"]) * 2
                 self._pending_neurons.append({
                     "id": schema["id"],
                     "content": schema["content"],
@@ -267,6 +274,13 @@ class L3Processor:
             "schemas_written": schema_count,
             "written_ids": written_ids,
             "all_neurons": written_ids,
+        }
+
+    def get_stats(self) -> dict:
+        """返回 cost tracker 用的统计"""
+        return {
+            "ollama_calls": self._ollama_calls,
+            "tokens_approx": self._tokens_approx,
         }
 
     def sync_to_infinitydb(self):
@@ -347,14 +361,15 @@ def mark_l2_graph_written(result: dict, l2_files: list):
 
 
 def run():
-    """L3 入口（方案A：单一 InfinityDB 数据源）"""
+    """L3 入口（方案A：单一 InfinityDB 数据源），返回 stats dict"""
     print(f"[L3] 开始执行: {datetime.now().isoformat()}")
 
     # Step 1: 加载 L2 数据
     l2_chunks, l2_files = load_l2_chunks()
     if not l2_chunks:
         print("[L3] 无待处理 chunks")
-        return
+        return {}
+    chunks_in = len(l2_chunks)
 
     inferred_relations = []
     for chunk in l2_chunks:
@@ -375,6 +390,17 @@ def run():
 
     print(f"[L3] 完成: neurons={result['neurons_written']}, schemas={result['schemas_written']}")
     print(f"[L3] 结束: {datetime.now().isoformat()}")
+
+    # 返回 stats（供 cost tracker 用）
+    c_stats = processor.get_stats()
+    return {
+        "chunks_in": chunks_in,
+        "neurons_written": result["neurons_written"],
+        "schemas_written": result["schemas_written"],
+        "relations_written": result["relations_written"],
+        "ollama_calls": c_stats["ollama_calls"],
+        "tokens_approx": c_stats["tokens_approx"],
+    }
 
 
 if __name__ == "__main__":

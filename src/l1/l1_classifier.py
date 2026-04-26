@@ -414,6 +414,12 @@ class L1Classifier:
         self.seen_hashes: set[str] = set()  # content_hash 去重（第1级）
         self.seen_vectors: list[tuple[str, list[float]]] = []  # (content_hash, vector)
         self.simhash_index = SimhashIndex(threshold=3)  # simhash 去重（第2级）
+        # cost tracker stats
+        self._dedup_level1 = 0  # content_hash 去重数
+        self._dedup_level2 = 0  # simhash 去重数
+        self._dedup_level3 = 0  # cosine 去重数
+        self._ollama_encode_batches = 0  # Ollama encode_batch 调用次数
+        self._ollama_tokens_approx = 0  # 估算 token 数
 
     def process(self, raw_chunks: list[dict]) -> list[dict]:
         """
@@ -466,6 +472,7 @@ class L1Classifier:
 
                 # 第1级去重：精确 hash（chunk 级别）
                 if chunk_hash in self.seen_hashes:
+                    self._dedup_level1 += 1
                     continue
                 self.seen_hashes.add(chunk_hash)
 
@@ -475,6 +482,7 @@ class L1Classifier:
                 if sim_dups:
                     # simhash 命中，说明和已有 chunk 表述近似
                     # 跳过，不加入 processed_chunk（由 cosine 做最终判断）
+                    self._dedup_level2 += 1
                     continue
 
                 chunk_id = hashlib.sha256(
@@ -531,7 +539,7 @@ class L1Classifier:
         for chunk, embedding in zip(unencoded, embeddings):
             chunk["vector"] = embedding
 
-            # cosine 去重（第2级）
+            # cosine 去重（第3级）
             is_dup = False
             for existing_hash, existing_vec in self.seen_vectors:
                 sim = cosine_similarity(embedding, existing_vec)
@@ -539,11 +547,26 @@ class L1Classifier:
                     chunk["dedup_level"] = 1
                     chunk["dup_of"] = existing_hash
                     is_dup = True
+                    self._dedup_level3 += 1
                     break
 
             if not is_dup:
                 chunk["dedup_level"] = 0
                 self.seen_vectors.append((chunk["content_hash"], embedding))
+
+        # Ollama encode_batch 调用 + token 估算（按每条 ~50 token）
+        self._ollama_encode_batches += 1
+        self._ollama_tokens_approx += len(texts) * 50
+
+    def get_stats(self) -> dict:
+        """返回 cost tracker 用的统计"""
+        return {
+            "ollama_calls": self._ollama_encode_batches,
+            "tokens_approx": self._ollama_tokens_approx,
+            "dedup_level1": self._dedup_level1,
+            "dedup_level2": self._dedup_level2,
+            "dedup_level3": self._dedup_level3,
+        }
 
     def process_from_tmp(self) -> list[dict]:
         """

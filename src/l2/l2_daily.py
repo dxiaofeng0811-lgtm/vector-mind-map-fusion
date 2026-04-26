@@ -595,14 +595,16 @@ def mark_l2a_processed(l2a_chunks: list[dict], date_str: str = None):
 
 
 def run():
-    """L2 入口"""
+    """L2 入口，返回 stats dict"""
     print(f"[L2] 开始执行: {datetime.now().isoformat()}")
 
     # Step 1: 加载 L2A 数据
     l2a_chunks = load_l2a_chunks()
     if not l2a_chunks:
         print("[L2] 无待处理 chunks")
-        return
+        return {}
+
+    chunks_in = len(l2a_chunks)
 
     # Step 2: 处理
     processor = L2Processor()
@@ -630,14 +632,28 @@ def run():
     date_str = datetime.now().strftime("%Y-%m-%d")
 
     # Step 5: 先标记 L2A 已处理（atomic write）
-    # 这样做的好处：如果后续 crash，L2A 中的 chunks 已经被标记，
-    # 不会在下次运行时重复处理，也不会重复写入 L2 区
     mark_l2a_processed(processed, date_str)
 
     # Step 6: 再写入 L2 区
     save_to_l2(processed, inferred_relations, date_str)
 
     print(f"[L2] 结束: {datetime.now().isoformat()}")
+
+    # 返回 stats（供 cost tracker 用）
+    # L2 不调用 Ollama（因为 L2A 没有向量），但 L2Processor 内部会用 OllamaEncoder 重编
+    # 这里从 processor.encoder 获取（如果 L2Processor 有暴露的话）
+    # 当前 L2Processor 使用的是 encoder.encode_batch，但没有暴露调用次数
+    # 暂时以 0 记录，后续可在 L2Processor 加 _ollama_calls 追踪
+    return {
+        "chunks_in": chunks_in,
+        "chunks_out": new_count,
+        "dedup_level1": dedup_counts.get(1, 0),
+        "dedup_level2": dedup_counts.get(2, 0),
+        "dedup_level3": dedup_counts.get(3, 0),
+        "dedup_level4": dedup_counts.get(4, 0),
+        "ollama_calls": 0,  # L2 当前不用 Ollama（L2A 无向量）
+        "tokens_approx": 0,
+    }
 
 
 if __name__ == "__main__":
