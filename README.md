@@ -2,7 +2,7 @@
 
 三层向量记忆融合系统：L1 提取 → L2 整理 → L3 检索
 
-> v1.1.0：方案A 实施 — InfinityDB 单一数据源 + 并行搜索（HNSW 语义 + 关键词字面）
+> v1.2.0：方案A（cost tracker + checkpoint + manifest + warm-cold） 实施 — InfinityDB 单一数据源 + 并行搜索（HNSW 语义 + 关键词字面）
 
 ---
 
