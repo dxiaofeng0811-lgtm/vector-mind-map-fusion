@@ -127,13 +127,29 @@ class SpreadingActivationRecall:
         self.hnsw = HnswSearch()
 
     def get_seeds_by_hnsw(self, query_vector: list[float], k: int = 50) -> dict[str, float]:
-        """Path1：HNSW 向量搜索（语义查全）"""
-        if self.infinitydb.hnsw.nodes:
-            results = self.infinitydb.vector_search(query_vector, k=k)
-            return {nid: float(score) for nid, score in results}
-        # fallback：旧版 index.jsonl
-        results = self.hnsw.search(query_vector, k=k)
-        return {nid: float(score) for nid, score in results if score > 0.0}
+        """
+        Path1：HNSW 向量搜索（语义查全）
+        优先 warm，不够再扩 cold。
+        """
+        if not self.infinitydb.hnsw.nodes:
+            # fallback：旧版 index.jsonl
+            results = self.hnsw.search(query_vector, k=k)
+            return {nid: float(score) for nid, score in results if score > 0.0}
+
+        # 先搜 warm（优先扩散热数据）
+        warm_results = self.infinitydb.vector_search(query_vector, k=k * 2, tier_filter="warm")
+        warm_ids = set(nid for nid, _ in warm_results)
+
+        # warm 不够再扩 cold
+        if len(warm_ids) < k:
+            cold_results = self.infinitydb.vector_search(query_vector, k=k * 2, tier_filter="cold")
+            cold_ids = [nid for nid, score in cold_results if nid not in warm_ids]
+            all_ids = list(warm_ids) + cold_ids
+        else:
+            all_ids = list(warm_ids)[:k * 2]
+
+        return {nid: 1.0 for nid in all_ids}
+
 
     def get_seeds_by_keyword(self, query: str, k: int = 50) -> dict[str, float]:
         """Path2：关键词搜索（字面查准）"""
@@ -293,7 +309,14 @@ class SpreadingActivationRecall:
 
         # Step 5: 排序 + top-k
         results.sort(key=lambda x: x["activation_score"], reverse=True)
-        return results[:top_k]
+        top_results = results[:top_k]
+
+        # Step 6: 更新 access_count / last_accessed / tier（warm/cold 分级）
+        if top_results:
+            recalled_ids = [n["id"] for n in top_results]
+            self.infinitydb.update_access(recalled_ids)
+
+        return top_results
 
 
 def fusion_recall(

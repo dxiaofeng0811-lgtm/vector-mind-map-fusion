@@ -374,12 +374,58 @@ class InfinityDBLite:
                 break
         return dict(result)
 
-    def vector_search(self, query_vector: list[float], k: int = 10) -> list[tuple[str, float]]:
-        """暴力向量检索（小数据集可靠）"""
+    def has_warm_nodes(self) -> bool:
+        """检查是否有 warm 节点（避免空搜索浪费）"""
+        for neuron in self.data["neurons"].values():
+            if neuron.get("tier") == "warm":
+                return True
+        return False
+
+    def update_access(self, neuron_ids: list[str]):
+        """
+        更新 access_count / last_accessed / tier（Recall 时调用）。
+        tier 规则：priority >= 4 或 access_count > 10 → warm，否则 cold。
+        """
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        changed = False
+        for nid in neuron_ids:
+            if nid not in self.data["neurons"]:
+                continue
+            neuron = self.data["neurons"][nid]
+            neuron["access_count"] = neuron.get("access_count", 0) + 1
+            neuron["last_accessed"] = now
+            priority = neuron.get("priority", 3)
+            access_count = neuron["access_count"]
+            if priority >= 4 or access_count > 10:
+                new_tier = "warm"
+            else:
+                new_tier = "cold"
+            if neuron.get("tier") != new_tier:
+                neuron["tier"] = new_tier
+                changed = True
+        if changed:
+            self._save_graph()
+
+    def vector_search(
+        self,
+        query_vector: list[float],
+        k: int = 10,
+        tier_filter: str = None,
+    ) -> list[tuple[str, float]]:
+        """
+        暴力向量检索（小数据集可靠）。
+        tier_filter="warm"：只搜 warm 节点
+        tier_filter="cold"：只搜 cold 节点
+        tier_filter=None：搜全部
+        """
         if not self.adj:
             return []
         scores = []
         for nid in self.adj.keys():
+            if tier_filter:
+                if self.data["neurons"].get(nid, {}).get("tier") != tier_filter:
+                    continue
             vec = self.vec_store.get(nid)
             if vec:
                 cos = cosine_similarity(query_vector, vec)
