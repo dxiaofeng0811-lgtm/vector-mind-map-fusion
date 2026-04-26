@@ -59,10 +59,6 @@ HNSW_MAX_ELEMENTS = 10000       # 预分配最大元素数
 # 总体流程限制
 MAX_CHUNKS_PER_RUN = 5000       # 单次运行最大处理量（防止内存溢出）
 
-# L3 去重阈值：和 InfinityDB 历史记忆的 cosine similarity 阈值
-# 用来确保 L2 的新内容不和已存入的长期记忆重复
-DEDUP_THRESHOLD_L3 = 0.85       # cosine > 0.85 → 认为是已有记忆的近似重复，跳过不写入
-
 # 关系权重
 RELATION_WEIGHTS = {
     "CAUSED_BY": 1.0,
@@ -423,25 +419,6 @@ class L3Processor:
                 if not vector or len(vector) != VECTOR_DIM or vector == [0.0] * VECTOR_DIM:
                     print(f"[L3] 跳过零向量 chunk: {neuron_id}")
                     # 同时跳过 neuron_batch 和 _pending_neurons
-                    continue
-
-                # ===== L3 核心去重：和 InfinityDB 历史记忆做 cosine 对比 =====
-                # 如果这条内容和已存入的长期记忆 cosine > 0.85，说明是重复记忆，跳过不写入
-                # 用 brute-force 代替 HNSW search（HNSW beam search 有精度损失，brute-force 对 ~30 个向量速度可接受）
-                best_match_cos = 0.0
-                for existing_id in list(self.infinitydb.vec_store._ids)[:]:
-                    existing_vec = self.infinitydb.vec_store.get(existing_id)
-                    if existing_vec and len(existing_vec) == VECTOR_DIM:
-                        cos = compute_cosine(vector, existing_vec)
-                        if cos > best_match_cos:
-                            best_match_cos = cos
-
-                dup_found = best_match_cos > DEDUP_THRESHOLD_L3
-
-                if dup_found:
-                    # 和历史记忆重复，不写入 Brain.db 也不写入 InfinityDB
-                    # 但仍标记为 processed（written_ids），避免 L2 再次被 L3 消费
-                    written_ids.append(neuron_id)
                     continue
 
                 self._pending_neurons.append({
