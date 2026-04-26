@@ -21,11 +21,17 @@ from typing import Optional
 
 # 配置
 BRAIN_DB_PATH = os.environ.get("NEURALMEMORY_DIR", os.path.expanduser("~/.local/share/neural-memory/brains.db"))
-HNSW_INDEX_PATH = Path("/workspace/fusion/memory/layers/hnsw/index.jsonl")
-INFINITYDB_DIR = Path("/workspace/fusion/memory/layers/infinitydb")
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+INFINITYDB_DIR = PROJECT_ROOT / "memory" / "layers" / "infinitydb"
+HNSW_INDEX_PATH = PROJECT_ROOT / "memory" / "layers" / "hnsw" / "index.jsonl"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "bge-m3")
 VECTOR_DIM = 1024
+
+# 确保 fusion 模块可导入（standalone 运行时需要）
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # InfinityDB-lite（邻接表 + HNSW，向量检索 + <1ms/hop BFS）
 from infinitydb_lite import InfinityDBLite
@@ -113,7 +119,7 @@ class SpreadingActivationRecall:
         self.recall_config = recall_config or DEFAULT_RECALL_CONFIG
         self.conn: Optional[sqlite3.Connection] = None
         # InfinityDB-lite：HNSW 向量 + 邻接表（<1ms/hop BFS）
-        self.infinitydb = InfinityDBLite()
+        self.infinitydb = InfinityDBLite(str(INFINITYDB_DIR))
         # 回退：旧版 HNSW search（index.jsonl）
         self.hnsw = HnswSearch()
 

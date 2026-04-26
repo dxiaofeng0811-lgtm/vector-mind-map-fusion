@@ -129,48 +129,45 @@ class OllamaEncoder:
         self.max_retries = max_retries       # 失败重试次数
 
     def encode_batch(self, texts: list[str]) -> list[list[float]]:
-        """修复 H：不再对 texts 去重，保持与原始顺序 1:1 对应"""
+        """修复：Ollama /api/embeddings 不支持 batch input，逐条编码保持 1:1 对应"""
         if not texts:
             return []
 
-        # 过滤空内容（但保留原始位置）
-        output = []
-        for t in texts:
-            if t and t.strip():
-                output.append(t.strip())
-            else:
-                output.append(None)  # 保留原始位置
-
-        # 收集有效文本（用于编码）
-        valid_texts = [t for t in output if t is not None]
-        if not valid_texts:
-            return [[0.0] * VECTOR_DIM for _ in texts]
-
-        # 分批编码（batch_size 配置真正生效）
         results = []
-        for i in range(0, len(valid_texts), self.batch_size):
-            batch = valid_texts[i:i + self.batch_size]
-            vecs = self._encode_batch_with_retry(batch)
-            results.extend(vecs)
+        for i, text in enumerate(texts):
+            if not (text and text.strip()):
+                results.append([0.0] * VECTOR_DIM)
+                continue
 
-        # 对齐：映射回原始顺序（有效文本 vs 结果 1:1）
-        result_map = {}
-        valid_idx = 0
-        for t in output:
-            if t is not None:
-                result_map[id(t)] = results[valid_idx]  # 用 id() 而非 t 本身（可能有重复）
-                valid_idx += 1
-
-        # 构建最终输出（原始顺序）
-        final_output = []
-        valid_idx = 0
-        for t in output:
-            if t is not None:
-                final_output.append(result_map[id(valid_texts[valid_idx])])
-                valid_idx += 1
-            else:
-                final_output.append([0.0] * VECTOR_DIM)
-        return final_output
+            for attempt in range(self.max_retries):
+                try:
+                    import urllib.request
+                    payload = json.dumps({
+                        "model": self.model,
+                        "prompt": text.strip()
+                    }).encode('utf-8')
+                    req = urllib.request.Request(
+                        f"{self.base_url}/api/embeddings",
+                        data=payload,
+                        headers={'Content-Type': 'application/json'}
+                    )
+                    with urllib.request.urlopen(req, timeout=self.timeout_sec) as resp:
+                        result = json.loads(resp.read())
+                        emb = result.get("embedding", [])
+                        if isinstance(emb, list) and len(emb) == VECTOR_DIM:
+                            results.append(emb)
+                            break
+                        else:
+                            results.append([0.0] * VECTOR_DIM)
+                            break
+                except Exception as e:
+                    if attempt == self.max_retries - 1:
+                        print(f"[OllamaEncoder] text[{i}] 放弃: {e}")
+                        results.append([0.0] * VECTOR_DIM)
+                    else:
+                        import time
+                        time.sleep(1 * (attempt + 1))
+        return results
 
     def _encode_batch_with_retry(self, texts: list[str]) -> list[list[float]]:
         """单批次编码，失败重试（最优解：真正的批量 HTTP）"""
@@ -314,7 +311,7 @@ def load_l2_chunks(date_str: str = None) -> list[dict]:
                         chunks.append(obj)
 
     print(f"[L3] 加载 L2 chunks: {len(chunks)} 条（来自 {len(l2_files)} 个文件）")
-    return chunks
+    return chunks, l2_files
 
 
 def generate_schema_neuron(session_chunks: list[dict], encoder: OllamaEncoder) -> Optional[dict]:
@@ -435,6 +432,7 @@ class L3Processor:
 
                 # 只有有效向量才写入 Brain.db
                 neuron_batch.append((neuron_id, brain_id, content, memory_type, priority, tier, abstraction_level, now, now))
+                written_ids.append(neuron_id)
                 # all_neurons 只收集有效向量 chunk（用于 rebuild_hnsw）
                 all_neurons.append(chunk)
 
@@ -595,7 +593,7 @@ class L3Processor:
         print(f"[L3] recall_config 已更新")
 
 
-def mark_l2_graph_written(result: dict):
+def mark_l2_graph_written(result: dict, l2_files: list):
     """标记 L2 中已写入的 chunks（扫描所有日期文件，atomic write 防 crash）"""
     # 修复 I：written_ids 只包含成功写入 Brain.db 的 chunk id
     written_ids = set(result.get("written_ids", []))
@@ -631,7 +629,7 @@ def run():
     init_brain_db(BRAIN_DB_PATH)
 
     # Step 2: 加载 L2 数据
-    l2_chunks = load_l2_chunks()
+    l2_chunks, l2_files = load_l2_chunks()
     if not l2_chunks:
         print("[L3] 无待处理 chunks")
         return
@@ -657,7 +655,7 @@ def run():
 
     # Step 7: 增量删除 L2（扫描所有日期的文件）
     # 用 result["written_ids"]（只有成功写入 Brain.db 的 chunk id）
-    mark_l2_graph_written(result)
+    mark_l2_graph_written(result, l2_files)
 
     processor.close()
 

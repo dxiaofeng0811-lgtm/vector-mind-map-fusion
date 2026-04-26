@@ -193,32 +193,33 @@ class OllamaEncoder:
         if not valid_texts:
             return []
 
-        for attempt in range(OLLAMA_MAX_RETRIES):
-            try:
-                resp = self._client.post(
-                    "/api/embeddings",
-                    json={"model": self.model, "prompt": valid_texts}
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    embeddings = data.get("embeddings", [])
-                    if embeddings and len(embeddings) == len(valid_texts):
-                        # 验证向量维度
-                        clean = []
-                        for emb in embeddings:
-                            if isinstance(emb, list) and len(emb) == 1024:
-                                clean.append(emb)
-                            else:
-                                clean.append([0.0] * 1024)
-                        return clean
-                # else: 非 200，重试
-            except (httpx.ConnectError, httpx.TimeoutException) as e:
-                print(f"[OllamaEncoder] Attempt {attempt+1} failed: {e}")
-                import time
-                time.sleep(1 * (attempt + 1))
+        results = []
+        for i, text in enumerate(valid_texts):
+            for attempt in range(OLLAMA_MAX_RETRIES):
+                try:
+                    resp = self.client.post(
+                        "/api/embeddings",
+                        json={"model": self.model, "prompt": text}
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        emb = data.get("embedding", [])
+                        if isinstance(emb, list) and len(emb) == 1024:
+                            results.append(emb)
+                            break
+                        else:
+                            results.append([0.0] * 1024)
+                            break
+                    # else: 非 200，重试
+                except (httpx.ConnectError, httpx.TimeoutException) as e:
+                    print(f"[OllamaEncoder] Attempt {attempt+1} failed for text[{i}]: {e}")
+                    import time
+                    time.sleep(1 * (attempt + 1))
+            else:
+                print(f"[OllamaEncoder] All {OLLAMA_MAX_RETRIES} attempts failed for text[{i}]")
+                results.append([0.0] * 1024)
 
-        print(f"[OllamaEncoder] All {OLLAMA_MAX_RETRIES} attempts failed")
-        return None
+        return results if results else None
 
 
 # ============================================================
@@ -555,9 +556,6 @@ def save_to_l2a(chunks: list[dict], date_str: str = None):
 # ============================================================
 def run():
     """手动运行 L1 Classifier（测试用）。"""
-    import sys
-    sys.path.insert(0, "/workspace/fusion/l1")
-
     from scan_sessions_incremental import ByteOffsetScanner
 
     scanner = ByteOffsetScanner()
