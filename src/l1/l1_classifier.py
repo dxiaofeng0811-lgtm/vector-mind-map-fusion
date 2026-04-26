@@ -8,8 +8,9 @@ L1: Classifier - 去噪 / Chunk / MemoryType / Priority / Tier / Hash / Vector /
   Stage 2: MemoryType 分类（14 种）
   Stage 2: Priority / Tier 分配
   Stage 2: content_hash 精确去重（第1级）
+  Stage 2: simhash 近似去重（第2级，纯文本，海明距离<3）
   Stage 2: Ollama bge-m3 向量编码（batch=10，1024d）
-  Stage 2: cosine similarity > 0.85 粗去重（第2级）
+  Stage 2: cosine similarity > 0.85 粗去重（第3级）
   Stage 3: 语义密度质量过滤（中文≥4字符 OR 英文≥3词）
   Stage 4: 输出到 L2A 区
 
@@ -29,9 +30,49 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 import math
+import struct
 
 # 项目根目录（向上推导）
 PROJECT_ROOT = Path(__file__).parent.parent.parent
+
+
+# ============================================================
+# Simhash 去重（纯文本，Python 标准库）
+# ============================================================
+
+def compute_simhash(content: str) -> int:
+    """计算内容的 simhash 值（64位）"""
+    try:
+        import hashlib
+        h = hashlib.md5(content.encode('utf-8')).digest()
+        return struct.unpack('>Q', h[:8])[0]
+    except Exception:
+        return 0
+
+
+def hamming_distance(hash1: int, hash2: int) -> int:
+    """计算两个 simhash 的 Hamming 距离"""
+    xor = hash1 ^ hash2
+    return bin(xor).count('1')
+
+
+class SimhashIndex:
+    """Simhash 近似去重索引（内存）"""
+
+    def __init__(self, threshold: int = 3):
+        self.hashes: list[tuple[int, str]] = []  # (simhash, chunk_id)
+        self.threshold = threshold
+
+    def add(self, simhash: int, chunk_id: str):
+        self.hashes.append((simhash, chunk_id))
+
+    def find_duplicates(self, simhash: int) -> list[str]:
+        """查找与给定 simhash 距离 < threshold 的所有 chunk_id"""
+        dup_ids = []
+        for h, cid in self.hashes:
+            if hamming_distance(simhash, h) < self.threshold:
+                dup_ids.append(cid)
+        return dup_ids
 
 # ============================================================
 # 配置
@@ -366,12 +407,13 @@ def assign_priority_tier(content: str, memory_type: str) -> tuple[int, int]:
 # L1 Classifier
 # ============================================================
 class L1Classifier:
-    """L1 分类器：去噪 / Chunk / Type / Priority / Hash / Vector / Cosine Dedup"""
+    """L1 分类器：去噪 / Chunk / Type / Priority / Hash / Simhash / Vector / Cosine Dedup"""
 
     def __init__(self):
         self.encoder = OllamaEncoder()
         self.seen_hashes: set[str] = set()  # content_hash 去重（第1级）
         self.seen_vectors: list[tuple[str, list[float]]] = []  # (content_hash, vector)
+        self.simhash_index = SimhashIndex(threshold=3)  # simhash 去重（第2级）
 
     def process(self, raw_chunks: list[dict]) -> list[dict]:
         """
@@ -427,9 +469,20 @@ class L1Classifier:
                     continue
                 self.seen_hashes.add(chunk_hash)
 
+                # 第2级去重：simhash 近似去重（纯文本，海明距离<3）
+                chunk_simhash = compute_simhash(chunk_text)
+                sim_dups = self.simhash_index.find_duplicates(chunk_simhash)
+                if sim_dups:
+                    # simhash 命中，说明和已有 chunk 表述近似
+                    # 跳过，不加入 processed_chunk（由 cosine 做最终判断）
+                    continue
+
                 chunk_id = hashlib.sha256(
                     f"{raw['session_id']}:{raw['byte_offset']}:{i}:{chunk_text[:50]}".encode()
                 ).hexdigest()[:16]
+
+                # simhash 索引注册（供后续 chunks 比对）
+                self.simhash_index.add(chunk_simhash, chunk_id)
 
                 processed_chunk = {
                     "id": chunk_id,
