@@ -598,13 +598,35 @@ def run():
     """L2 入口，返回 stats dict"""
     print(f"[L2] 开始执行: {datetime.now().isoformat()}")
 
+    # Step 0: 加载 checkpoint（断点恢复）
+    from l2_checkpoint import load_checkpoint, save_checkpoint, clear_checkpoint, CHECKPOINT_INTERVAL
+    cp = load_checkpoint()
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    checkpoint_line = 0  # 当前已checkpoint的行号
+    processed_ids_from_cp = set()
+    if cp and cp.get("date_str") == date_str:
+        processed_ids_from_cp = set(cp.get("processed_ids", []))
+        print(f"[L2] Checkpoint 恢复: {len(processed_ids_from_cp)} 条已处理，跳过")
+
     # Step 1: 加载 L2A 数据
-    l2a_chunks = load_l2a_chunks()
+    l2a_chunks = load_l2a_chunks(date_str)
     if not l2a_chunks:
         print("[L2] 无待处理 chunks")
         return {}
 
+    # Step 1b: 过滤掉 checkpoint 中已处理的 chunks
+    # L2A chunks 用 content_hash 作为稳定 ID
+    if processed_ids_from_cp:
+        before = len(l2a_chunks)
+        l2a_chunks = [c for c in l2a_chunks if c.get("content_hash") not in processed_ids_from_cp]
+        print(f"[L2] Checkpoint 过滤后: {before} → {len(l2a_chunks)} 条")
+
     chunks_in = len(l2a_chunks)
+    if not l2a_chunks:
+        # checkpoint 恢复完了，但没有新 chunks
+        clear_checkpoint()
+        print("[L2] 无待处理 chunks（全部已被 checkpoint 覆盖）")
+        return {}
 
     # Step 2: 处理
     processor = L2Processor()
@@ -629,21 +651,27 @@ def run():
     for chunk in processed:
         inferred_relations.extend(chunk.get("inferred_relations", []))
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
+    # Step 5: 写 checkpoint（先于 mark，防止 crash 重复处理）
+    # 每处理 CHECKPOINT_INTERVAL 条写一次，累积 processed_ids
+    all_processed_ids = set(processed_ids_from_cp)
+    for i, chunk in enumerate(processed):
+        all_processed_ids.add(chunk["id"])
+        if (i + 1) % CHECKPOINT_INTERVAL == 0:
+            save_checkpoint(date_str, all_processed_ids, checkpoint_line + i + 1)
+            print(f"[L2] Checkpoint 已保存: {len(all_processed_ids)} 条已处理")
 
-    # Step 5: 先标记 L2A 已处理（atomic write）
+    # Step 6: 先标记 L2A 已处理（atomic write）
     mark_l2a_processed(processed, date_str)
 
-    # Step 6: 再写入 L2 区
+    # Step 7: 再写入 L2 区
     save_to_l2(processed, inferred_relations, date_str)
+
+    # Step 8: 成功完成，清除 checkpoint
+    clear_checkpoint()
 
     print(f"[L2] 结束: {datetime.now().isoformat()}")
 
     # 返回 stats（供 cost tracker 用）
-    # L2 不调用 Ollama（因为 L2A 没有向量），但 L2Processor 内部会用 OllamaEncoder 重编
-    # 这里从 processor.encoder 获取（如果 L2Processor 有暴露的话）
-    # 当前 L2Processor 使用的是 encoder.encode_batch，但没有暴露调用次数
-    # 暂时以 0 记录，后续可在 L2Processor 加 _ollama_calls 追踪
     return {
         "chunks_in": chunks_in,
         "chunks_out": new_count,
@@ -651,7 +679,7 @@ def run():
         "dedup_level2": dedup_counts.get(2, 0),
         "dedup_level3": dedup_counts.get(3, 0),
         "dedup_level4": dedup_counts.get(4, 0),
-        "ollama_calls": 0,  # L2 当前不用 Ollama（L2A 无向量）
+        "ollama_calls": 0,
         "tokens_approx": 0,
     }
 
