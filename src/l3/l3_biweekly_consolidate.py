@@ -400,6 +400,7 @@ def run():
         "relations_written": result["relations_written"],
         "ollama_calls": c_stats["ollama_calls"],
         "tokens_approx": c_stats["tokens_approx"],
+        "l2_files_cleared": [str(f.name) for f in l2_files],
     }
 
 

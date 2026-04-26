@@ -19,17 +19,29 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "l3"))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 os.chdir(str(PROJECT_ROOT / "src" / "l3"))
 
-from l3_biweekly_consolidate import run
+from l3_biweekly_consolidate import run, L3Processor, INFINITYDB_DIR
 from utils.cost_tracker import track_layer
+from l3_manifest import write_manifest
 
 
 def main():
     t0 = time_module.time()
     print(f"[L3 Cron] 开始执行: {datetime.now().isoformat()}")
 
+    # 记录运行前的 InfinityDB 节点数
+    infinitydb_before = InfinityDBLite(str(INFINITYDB_DIR))
+    nodes_before = len(infinitydb_before.data.get("neurons", {}))
+    del infinitydb_before
+
     stats = run()
     duration_ms = int((time_module.time() - t0) * 1000)
 
+    # 记录运行后的 InfinityDB 节点数
+    infinitydb_after = InfinityDBLite(str(INFINITYDB_DIR))
+    nodes_after = len(infinitydb_after.data.get("neurons", {}))
+    del infinitydb_after
+
+    # 写 cost tracker
     if stats and stats.get("neurons_written", 0) > 0:
         track_layer(
             layer="l3",
@@ -44,13 +56,23 @@ def main():
             },
         )
     else:
-        # 无 chunks 也记录一条
         track_layer(
             layer="l3",
             chunks_in=0,
             chunks_out=0,
             duration_ms=duration_ms,
         )
+
+    # 写 manifest
+    l2_files_cleared = stats.get("l2_files_cleared", []) if stats else []
+    stats["duration_ms"] = duration_ms
+    write_manifest(
+        l3_stats=stats,
+        infinitydb_nodes_before=nodes_before,
+        infinitydb_nodes_after=nodes_after,
+        l2_files_cleared=l2_files_cleared,
+    )
+    print(f"[L3 Cron] manifest 已写入")
 
     print(f"[L3 Cron] 结束: {datetime.now().isoformat()}")
 
