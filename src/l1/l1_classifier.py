@@ -19,7 +19,7 @@ L1: Classifier - 去噪 / Chunk / MemoryType / Priority / Tier / Hash / Vector /
   - Classifier 做二次语义密度检查
   - Chunk 拆分保证 50 字 overlap，不丢失边界内容
 
-输出：/workspace/fusion/memory/layers/l2a/YYYY-MM-DD.jsonl
+输出：$PROJECT_ROOT/memory/layers/l2a/YYYY-MM-DD.jsonl
 """
 
 import json

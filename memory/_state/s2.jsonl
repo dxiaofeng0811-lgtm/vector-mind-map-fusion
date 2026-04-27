@@ -1,0 +1,1 @@
+{"session_id": "s2", "byte_offset": 0, "timestamp": "2026-04-27T10:52:55+08:00", "source": "test", "content": "这是一段关于 LLM idle timeout 的技术分析文档，包含模型响应中断的根因描述", "content_hash": "hash-cosine-001", "chunk_index": 0, "total_chunks": 1, "dedup_level": 0, "_scan_filter_reason": null, "dup_of": null, "processed": false}

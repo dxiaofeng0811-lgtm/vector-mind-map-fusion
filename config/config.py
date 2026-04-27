@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 全局配置
-所有路径基于项目根目录，不依赖 /workspace/fusion
+所有路径基于项目根目录，不依赖 /workspace
 """
 
 import os

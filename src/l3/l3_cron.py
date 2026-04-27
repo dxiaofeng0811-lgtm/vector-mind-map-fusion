@@ -4,7 +4,7 @@ L3 Cron Entry Point
 被 OpenClaw cron 触发，执行完整的 L3 pipeline。
 触发时间：每两天 03:00（Asia/Shanghai）
 
-路径基于项目根目录（不依赖 /workspace/fusion）
+L3 cron — 路径基于项目根目录
 
 用法:
   python3 src/l3/l3_cron.py --user-open-id ou_xxx

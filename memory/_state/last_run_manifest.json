@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "run_at": "2026-04-27T02:52:57.188932+00:00",
+  "l3": {
+    "chunks_in": 3,
+    "neurons_written": 3,
+    "schemas_written": 0,
+    "relations_written": 4,
+    "ollama_calls": 3,
+    "tokens_approx": 344,
+    "duration_ms": 1495,
+    "infinitydb_nodes_before": 99,
+    "infinitydb_nodes_after": 102,
+    "infinitydb_nodes_delta": 3,
+    "l2_files_cleared": [
+      "2026-04-26.jsonl",
+      "2026-04-27-pua-test.jsonl",
+      "2026-04-27.jsonl",
+      "test-l3-manual.jsonl"
+    ],
+    "errors": []
+  },
+  "l1_cost": {
+    "layer": "l1",
+    "timestamp": "2026-04-27T02:13:18.958107+00:00",
+    "ollama_calls": 1,
+    "tokens_approx": 1750,
+    "chunks_in": 9,
+    "chunks_out": 24,
+    "dedup": {
+      "level1_content_hash": 0,
+      "level2_simhash": 0,
+      "level3_cosine": 11,
+      "level4_hnsw": 0
+    },
+    "duration_ms": 23751,
+    "errors": []
+  },
+  "l2_cost": {
+    "layer": "l2",
+    "timestamp": "2026-04-27T02:12:55.209051+00:00",
+    "ollama_calls": 0,
+    "tokens_approx": 0,
+    "chunks_in": 11,
+    "chunks_out": 7,
+    "dedup": {
+      "level1_content_hash": 4,
+      "level2_simhash": 0,
+      "level3_cosine": 0,
+      "level4_hnsw": 0
+    },
+    "duration_ms": 1,
+    "errors": []
+  }
+}

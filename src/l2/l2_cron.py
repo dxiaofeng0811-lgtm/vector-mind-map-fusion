@@ -4,7 +4,7 @@ L2 Cron Entry Point
 被 OpenClaw cron 触发，执行完整的 L2 pipeline。
 触发时间：每天 00:30（Asia/Shanghai）
 
-路径基于项目根目录（不依赖 /workspace/fusion）
+L2 cron — 路径基于项目根目录
 """
 
 import sys

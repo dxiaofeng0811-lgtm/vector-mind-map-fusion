@@ -228,7 +228,7 @@ class InfinityDBLite:
       - 单一数据源，无同步问题
     """
 
-    def __init__(self, data_dir: str = "/workspace/fusion/memory/layers/infinitydb"):
+    def __init__(self, data_dir: str = "/root/.openclaw/workspace/vector-mind-map-fusion/memory/layers/infinitydb"):
         self.data_dir = Path(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
 

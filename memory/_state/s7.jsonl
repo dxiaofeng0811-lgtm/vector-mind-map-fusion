@@ -1,0 +1,1 @@
+{"session_id": "s7", "byte_offset": 0, "timestamp": "2026-04-27T10:52:55+08:00", "source": "test", "content": "第二个 session 的测试数据，用于验证 ByteOffsetScanner 多会话并行处理", "content_hash": "hash-s7-001", "chunk_index": 0, "total_chunks": 1, "dedup_level": 0, "_scan_filter_reason": null, "dup_of": null, "processed": false}

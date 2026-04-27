@@ -31,14 +31,14 @@
       "file_size": 3493
     },
     "1b8572ba-6f79-4934-a2d2-743a038835a4.trajectory": {
-      "position": 20218745,
-      "last_position_time": 1777202177.802838,
-      "file_size": 20218745
+      "position": 27706982,
+      "last_position_time": 1777244412.225697,
+      "file_size": 27706982
     },
     "1b8572ba-6f79-4934-a2d2-743a038835a4": {
-      "position": 5160765,
-      "last_position_time": 1777202177.806592,
-      "file_size": 5160765
+      "position": 7519969,
+      "last_position_time": 1777244412.271899,
+      "file_size": 7519969
     },
     "f8a22975-6cec-46af-8f08-d55333fc0570.trajectory": {
       "position": 235454,
@@ -129,7 +129,132 @@
       "position": 235930,
       "last_position_time": 1777202177.806874,
       "file_size": 235930
+    },
+    "15ae0490-c8f2-4b21-90ac-0633937892c4": {
+      "position": 20460,
+      "last_position_time": 1777244412.271999,
+      "file_size": 20460
+    },
+    "15ae0490-c8f2-4b21-90ac-0633937892c4.trajectory": {
+      "position": 254178,
+      "last_position_time": 1777244412.276571,
+      "file_size": 254178
+    },
+    "ce8b7880-de48-4a46-af64-28e50c0f93ac": {
+      "position": 3750,
+      "last_position_time": 1777244412.199447,
+      "file_size": 3750
+    },
+    "f6a51bea-bda5-478d-9627-abda2c44c0cf.trajectory": {
+      "position": 240608,
+      "last_position_time": 1777252903.395816,
+      "file_size": 240608
+    },
+    "f6a51bea-bda5-478d-9627-abda2c44c0cf": {
+      "position": 3443,
+      "last_position_time": 1777252903.395887,
+      "file_size": 3443
+    },
+    "ce8b7880-de48-4a46-af64-28e50c0f93ac.trajectory": {
+      "position": 471742,
+      "last_position_time": 1777244412.274561,
+      "file_size": 471742
+    },
+    "a9547306-5c85-4241-9da4-099aaa2c2bab": {
+      "position": 9216,
+      "last_position_time": 1777244412.274831,
+      "file_size": 9216
+    },
+    "a9547306-5c85-4241-9da4-099aaa2c2bab.trajectory": {
+      "position": 246285,
+      "last_position_time": 1777244412.276255,
+      "file_size": 246285
+    },
+    "93abb2f7-1119-4f96-b103-78f15034655b": {
+      "position": 1798036,
+      "last_position_time": 1777258814.212894,
+      "file_size": 1798036
+    },
+    "93abb2f7-1119-4f96-b103-78f15034655b.trajectory": {
+      "position": 4050921,
+      "last_position_time": 1777258814.215481,
+      "file_size": 4050921
+    },
+    "1d5db345-94c4-42f9-bc67-6c2cd4cae5a9": {
+      "position": 185598,
+      "last_position_time": 1777258814.197639,
+      "file_size": 185598
+    },
+    "1e86fe32-a081-4676-8f91-a6349b82268f": {
+      "position": 4599,
+      "last_position_time": 1777255975.213755,
+      "file_size": 4599
+    },
+    "1d5db345-94c4-42f9-bc67-6c2cd4cae5a9.trajectory": {
+      "position": 470862,
+      "last_position_time": 1777258814.200058,
+      "file_size": 470862
+    },
+    "a3512a86-c0f5-4460-8b42-ed5910e649fb.trajectory": {
+      "position": 569915,
+      "last_position_time": 1777258814.203331,
+      "file_size": 569915
+    },
+    "1e86fe32-a081-4676-8f91-a6349b82268f.trajectory": {
+      "position": 246607,
+      "last_position_time": 1777255975.221883,
+      "file_size": 246607
+    },
+    "a3512a86-c0f5-4460-8b42-ed5910e649fb": {
+      "position": 17472,
+      "last_position_time": 1777258814.215896,
+      "file_size": 17472
+    },
+    "s2": {
+      "position": 0,
+      "last_position_time": 1777258375.639898,
+      "file_size": 0
+    },
+    "s3": {
+      "position": 0,
+      "last_position_time": 1777258375.6402607,
+      "file_size": 0
+    },
+    "s4": {
+      "position": 0,
+      "last_position_time": 1777258375.6411018,
+      "file_size": 0
+    },
+    "s5": {
+      "position": 0,
+      "last_position_time": 1777258375.6416843,
+      "file_size": 0
+    },
+    "s6": {
+      "position": 0,
+      "last_position_time": 1777258375.6420994,
+      "file_size": 0
+    },
+    "s7": {
+      "position": 0,
+      "last_position_time": 1777258375.6425614,
+      "file_size": 0
+    },
+    "s8": {
+      "position": 0,
+      "last_position_time": 1777258375.6429656,
+      "file_size": 0
+    },
+    "a8bfa344-96bf-49c6-9edf-aac57e9dca5b": {
+      "position": 1966,
+      "last_position_time": 1777258814.196717,
+      "file_size": 1966
+    },
+    "a8bfa344-96bf-49c6-9edf-aac57e9dca5b.trajectory": {
+      "position": 238809,
+      "last_position_time": 1777258814.205249,
+      "file_size": 238809
     }
   },
-  "last_scan": "2026-04-26T11:16:17.806898+00:00"
+  "last_scan": "2026-04-27T03:00:14.215911+00:00"
 }

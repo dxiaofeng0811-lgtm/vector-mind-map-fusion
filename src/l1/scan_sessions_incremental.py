@@ -18,7 +18,7 @@ L1: Session Scanner with Byte Offset
   7. 残留 JSON 代码块 → 截断
   8. 边界情况 → 保留，交给 Classifier 语义密度检查
 
-存储位置: /workspace/fusion/memory/_state/scan_sessions_incremental.json
+存储位置: $PROJECT_ROOT/memory/_state/scan_sessions_incremental.json
 """
 
 import json

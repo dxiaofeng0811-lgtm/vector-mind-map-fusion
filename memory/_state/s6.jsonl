@@ -1,0 +1,1 @@
+{"session_id": "s6", "byte_offset": 0, "timestamp": "2026-04-27T10:52:55+08:00", "source": "test", "content": "这是一条完全原创的 L1 分类测试内容，包含独特的上下文信息以绕过所有去重检查", "content_hash": "hash-unique-001", "chunk_index": 0, "total_chunks": 1, "dedup_level": 0, "_scan_filter_reason": null, "dup_of": null, "processed": false}
