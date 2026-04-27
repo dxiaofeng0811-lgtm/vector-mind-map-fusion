@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
-L3: Biweekly Consolidator + InfinityDB Writer（方案A：单一数据源）
-读取 L2 区数据，写入 InfinityDB（唯一写入）
+L3: Biweekly Consolidator + 双写（Brain.db + InfinityDB）
+读取 L2 区数据，写入 neural-memory Brain.db + InfinityDB 单一数据源
 触发时间：每两天 03:00（Asia/Shanghai）
 
-流程（单一数据源，无双写）：
+流程（双写模式）：
   ① 读取 L2 区 graph_written=False 的 chunks
   ② 收集神经元 + 元数据 + 关系
-  ③ 批量写入 InfinityDB（add_neuron_with_metadata）
-  ④ 更新 recall_config 到 InfinityDB
-  ⑤ 增量删除 L2
+  ③ 批量写入 Brain.db（SQLite，主存储，支持 priority 排序精确召回）
+  ④ 批量写入 InfinityDB（向量 + 图结构）
+  ⑤ 更新 recall_config 到 InfinityDB
+  ⑥ 增量删除 L2
 """
 
 import json
 import os
 import math
 import time
+import sqlite3
 import struct
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +28,8 @@ from typing import Optional
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 L2_DIR = PROJECT_ROOT / "memory" / "layers" / "l2"
 INFINITYDB_DIR = PROJECT_ROOT / "memory" / "layers" / "infinitydb"
+BRAIN_DB_DIR = os.environ.get("NEURALMEMORY_DIR", os.path.expanduser("~/.local/share/neural-memory"))
+BRAIN_DB_PATH = os.path.join(BRAIN_DB_DIR, "brains.db")
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "bge-m3")
 VECTOR_DIM = 1024
@@ -165,27 +169,76 @@ def tfidf_extract_keywords(contents: list[str], top_n: int = 5) -> list[str]:
 
 class L3Processor:
     """
-    L3 处理器（方案A：单一数据源）
+    L3 处理器（双写模式：Brain.db + InfinityDB）
 
     写入流程：
-      write_chunks() → 收集神经元数据
-      sync_to_infinitydb() → 批量写入 InfinityDB（唯一写入）
+      connect() → 初始化 Brain.db 连接
+      write_chunks() → 收集神经元 + 写 Brain.db + 写 InfinityDB
+      sync_to_infinitydb() → 确保 InfinityDB 同步完成
     """
 
     def __init__(self):
         self.encoder = OllamaEncoder()
         self.infinitydb = InfinityDBLite(str(INFINITYDB_DIR))
+        self._conn: Optional[sqlite3.Connection] = None
         self._pending_neurons: list[dict] = []
         self._pending_relations: list[dict] = []
         # cost tracker stats
         self._ollama_calls = 0
         self._tokens_approx = 0
 
+    def connect(self):
+        """连接 Brain.db"""
+        os.makedirs(os.path.dirname(BRAIN_DB_PATH), exist_ok=True)
+        self._conn = sqlite3.connect(BRAIN_DB_PATH)
+        # 确保表存在
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS brains (
+                id TEXT PRIMARY KEY, name TEXT, config TEXT,
+                created_at TEXT, updated_at TEXT
+            )
+        """)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS neurons (
+                id TEXT PRIMARY KEY, brain_id TEXT, content TEXT,
+                memory_type TEXT, priority REAL, tier TEXT,
+                abstraction_level INTEGER, created_at TEXT, updated_at TEXT
+            )
+        """)
+        self._conn.execute("""
+            CREATE TABLE IF NOT EXISTS synapses (
+                id TEXT PRIMARY KEY, brain_id TEXT, source_id TEXT, target_id TEXT,
+                rel_type TEXT, weight REAL, created_at TEXT
+            )
+        """)
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_neurons_brain ON neurons(brain_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_neurons_priority ON neurons(priority DESC)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_synapses_brain ON synapses(brain_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_synapses_source ON synapses(source_id)")
+        self._conn.execute("CREATE INDEX IF NOT EXISTS idx_synapses_target ON synapses(target_id)")
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
     def write_chunks(self, chunks: list[dict], inferred_relations: list[dict]) -> dict:
         """
-        收集神经元数据（只写 InfinityDB，不写 Brain.db）
+        批量写入 Brain.db + 收集待同步 InfinityDB 数据
         """
+        if self._conn is None:
+            self.connect()
+
         now = datetime.now(timezone.utc).isoformat()
+        brain_id = "default"
+
+        # 确保 brain 存在
+        cursor = self._conn.execute("SELECT id FROM brains WHERE id = ?", (brain_id,))
+        if not cursor.fetchone():
+            self._conn.execute(
+                "INSERT INTO brains (id, name, config, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+                (brain_id, "default", "{}", now, now)
+            )
 
         session_groups = defaultdict(list)
         for chunk in chunks:
@@ -194,6 +247,8 @@ class L3Processor:
         written_count = 0
         schema_count = 0
         written_ids = []
+        neuron_batch = []
+        synapse_batch = []
 
         for session_id, session_chunks in session_groups.items():
             for chunk in session_chunks:
@@ -202,13 +257,14 @@ class L3Processor:
                 memory_type = chunk.get("memory_type", "context")
                 priority = chunk.get("priority", 3)
                 tier = chunk.get("tier", "cold")
+                abstraction_level = 3 if memory_type == "schema" else 1
 
                 # 重新编码向量
                 vector = chunk.get("vector", [])
                 if not vector:
                     vectors = self.encoder.encode_batch([content])
                     self._ollama_calls += 1
-                    self._tokens_approx += len(content) * 2  # 估算
+                    self._tokens_approx += len(content) * 2
                     vector = vectors[0] if vectors else []
 
                 # 零向量跳过
@@ -216,6 +272,12 @@ class L3Processor:
                     print(f"[L3] 跳过零向量 chunk: {neuron_id}")
                     continue
 
+                # Brain.db 写入
+                neuron_batch.append((neuron_id, brain_id, content, memory_type, priority, tier, abstraction_level, now, now))
+                written_ids.append(neuron_id)
+                written_count += 1
+
+                # InfinityDB pending
                 self._pending_neurons.append({
                     "id": neuron_id,
                     "content": content,
@@ -225,42 +287,61 @@ class L3Processor:
                     "tier": tier,
                     "timestamp": chunk.get("timestamp", now),
                 })
-                written_ids.append(neuron_id)
-                written_count += 1
 
             # SCHEMA 生成
             schema = generate_schema_neuron(session_chunks, self.encoder)
             if schema:
                 self._ollama_calls += 1
                 self._tokens_approx += len(schema["content"]) * 2
+                schema_id = schema["id"]
+                abstraction_level = 3
+                neuron_batch.append((schema_id, brain_id, schema["content"], "schema", 6, "warm", abstraction_level, now, now))
+                written_ids.append(schema_id)
+                schema_count += 1
+
+                # InfinityDB pending
                 self._pending_neurons.append({
-                    "id": schema["id"],
+                    "id": schema_id,
                     "content": schema["content"],
                     "vector": schema.get("vector", []),
                     "memory_type": "schema",
-                    "priority": 4,
+                    "priority": 6,
                     "tier": "warm",
                     "timestamp": now,
                 })
-                written_ids.append(schema["id"])
-                schema_count += 1
-
                 for chunk in session_chunks:
+                    # Brain.db schema→chunk relation
+                    synapse_batch.append((f"{schema_id}->{chunk['id']}", brain_id, schema_id, chunk["id"], "schema_of", 1.0, now))
+                    # InfinityDB pending
                     self._pending_relations.append({
-                        "from": schema["id"],
+                        "from": schema_id,
                         "to": chunk["id"],
                         "weight": 1.0,
                         "rel_type": "schema_of",
                     })
 
-        # 收集 inferred relations
+        # Brain.db 批量写入
+        if neuron_batch:
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO neurons (id, brain_id, content, memory_type, priority, tier, abstraction_level, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                neuron_batch
+            )
+        if synapse_batch:
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO synapses (id, brain_id, source_id, target_id, rel_type, weight, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                synapse_batch
+            )
+
+        # inferred relations
         relations_count = 0
+        synapse_relations = []
         for rel in inferred_relations:
             from_id = rel.get("from")
             to_id = rel.get("to")
             rel_type = rel.get("rel_type", "CAUSED_BY")
             weight = rel.get("weight", 0.5)
             if from_id and to_id:
+                synapse_relations.append((f"{from_id}->{to_id}", brain_id, from_id, to_id, rel_type, weight, now))
                 self._pending_relations.append({
                     "from": from_id,
                     "to": to_id,
@@ -269,7 +350,14 @@ class L3Processor:
                 })
                 relations_count += 1
 
-        print(f"[L3] 收集 neurons: {written_count}, schemas: {schema_count}")
+        if synapse_relations:
+            self._conn.executemany(
+                "INSERT OR REPLACE INTO synapses (id, brain_id, source_id, target_id, rel_type, weight, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                synapse_relations
+            )
+
+        self._conn.commit()
+        print(f"[L3] Brain.db 写入: neurons={written_count}, schemas={schema_count}, relations={relations_count}")
 
         return {
             "neurons_written": written_count,

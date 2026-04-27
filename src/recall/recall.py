@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Fusion Recall Layer（方案A：单一 InfinityDB 数据源 + 并行搜索）
+Fusion Recall Layer（双写模式：Brain.db + InfinityDB）
 
 架构：
-  InfinityDB（唯一数据源）
-    ├─ get_neurons()       → 元数据读取
+  Brain.db（SQLite，主存储）
+    └─ get_seeds_by_keyword() → priority 排序精确召回
+  InfinityDB（向量 + 图结构）
     ├─ vector_search()     → HNSW 向量搜索（语义）
-    ├─ keyword_search()    → 关键词全文搜索（字面）
-    └─ adjacency_bfs()     → 图扩散
+    ├─ adjacency_bfs()     → 图扩散
+    └─ get_neurons()       → 元数据读取
 
 并行搜索路径：
   Path1: HNSW 向量搜索 → top-N 候选（语义查全）
-  Path2: 关键词搜索    → top-N 候选（字面查准）
+  Path2: Brain.db keyword → priority 排序（字面查准）
   合并 → spreading activation → 元数据过滤 → top-k 返回
 
 触发方式：Agent 通过 tool_call 直接调用
@@ -20,6 +21,7 @@ Fusion Recall Layer（方案A：单一 InfinityDB 数据源 + 并行搜索）
 import json
 import math
 import os
+import sqlite3
 from pathlib import Path
 from collections import defaultdict
 from typing import Optional
@@ -27,6 +29,7 @@ from typing import Optional
 # 配置
 PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 INFINITYDB_DIR = PROJECT_ROOT / "memory" / "layers" / "infinitydb"
+BRAIN_DB_PATH = os.environ.get("NEURALMEMORY_DIR", os.path.expanduser("~/.local/share/neural-memory/brains.db"))
 HNSW_INDEX_PATH = PROJECT_ROOT / "memory" / "layers" / "hnsw" / "index.jsonl"
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "bge-m3")
@@ -125,6 +128,18 @@ class SpreadingActivationRecall:
         self.recall_config = recall_config or DEFAULT_RECALL_CONFIG
         self.infinitydb = InfinityDBLite(str(INFINITYDB_DIR))
         self.hnsw = HnswSearch()
+        self._conn: Optional[sqlite3.Connection] = None
+
+    def connect(self):
+        """连接 Brain.db（lazy）"""
+        if self._conn is None:
+            os.makedirs(os.path.dirname(BRAIN_DB_PATH), exist_ok=True)
+            self._conn = sqlite3.connect(BRAIN_DB_PATH)
+
+    def close(self):
+        if self._conn:
+            self._conn.close()
+            self._conn = None
 
     def get_seeds_by_hnsw(self, query_vector: list[float], k: int = 50) -> dict[str, float]:
         """
@@ -152,9 +167,26 @@ class SpreadingActivationRecall:
 
 
     def get_seeds_by_keyword(self, query: str, k: int = 50) -> dict[str, float]:
-        """Path2：关键词搜索（字面查准）"""
-        results = self.infinitydb.keyword_search(query, k=k)
-        return {nid: float(score) for nid, score in results}
+        """
+        Path2：Brain.db 关键词搜索（字面查准）
+        使用 SQL LIKE 匹配 content 和 memory_type，
+        按 priority 字段排序（priority 高的 neuron 天然质量高，规避 hub neuron 问题）
+        """
+        self.connect()
+        if not self._conn:
+            return {}
+        try:
+            cursor = self._conn.execute(
+                """SELECT id, priority FROM neurons
+                   WHERE content LIKE ? OR memory_type LIKE ?
+                   ORDER BY priority DESC
+                   LIMIT ?""",
+                (f"%{query}%", f"%{query}%", k)
+            )
+            return {row[0]: float(row[1]) / 10.0 for row in cursor.fetchall()}
+        except Exception as e:
+            print(f"[Recall] 关键词搜索失败: {e}")
+            return {}
 
     def merge_seeds(self, vector_seeds: dict[str, float], keyword_seeds: dict[str, float]) -> dict[str, float]:
         """
