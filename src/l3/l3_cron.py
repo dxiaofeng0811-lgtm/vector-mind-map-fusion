@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src" / "l3"))
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 os.chdir(str(PROJECT_ROOT / "src" / "l3"))
 
-from l3_biweekly_consolidate import run, L3Processor, INFINITYDB_DIR
+from l3_biweekly_consolidate import run, L3Processor, INFINITYDB_DIR, InfinityDBLite
 from utils.cost_tracker import track_layer
 from l3_manifest import write_manifest
 
