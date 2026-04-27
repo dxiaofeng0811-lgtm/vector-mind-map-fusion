@@ -176,9 +176,9 @@
       "file_size": 1798036
     },
     "93abb2f7-1119-4f96-b103-78f15034655b.trajectory": {
-      "position": 4050921,
-      "last_position_time": 1777258814.215481,
-      "file_size": 4050921
+      "position": 7188904,
+      "last_position_time": 1777273477.648512,
+      "file_size": 7188904
     },
     "1d5db345-94c4-42f9-bc67-6c2cd4cae5a9": {
       "position": 185598,
@@ -246,15 +246,35 @@
       "file_size": 0
     },
     "a8bfa344-96bf-49c6-9edf-aac57e9dca5b": {
-      "position": 1966,
-      "last_position_time": 1777258814.196717,
-      "file_size": 1966
+      "position": 5195,
+      "last_position_time": 1777273477.553259,
+      "file_size": 5195
     },
     "a8bfa344-96bf-49c6-9edf-aac57e9dca5b.trajectory": {
-      "position": 238809,
-      "last_position_time": 1777258814.205249,
-      "file_size": 238809
+      "position": 246430,
+      "last_position_time": 1777273477.581434,
+      "file_size": 246430
+    },
+    "62567a92-ac6a-45d7-9692-8b250e20b5f9.trajectory": {
+      "position": 3922223,
+      "last_position_time": 1777273477.58125,
+      "file_size": 3922223
+    },
+    "62567a92-ac6a-45d7-9692-8b250e20b5f9": {
+      "position": 1538518,
+      "last_position_time": 1777273477.62671,
+      "file_size": 1538518
+    },
+    "df6a70fb-c53c-43ee-986f-1f48e4c0fe6b.trajectory": {
+      "position": 238816,
+      "last_position_time": 1777273477.649637,
+      "file_size": 238816
+    },
+    "df6a70fb-c53c-43ee-986f-1f48e4c0fe6b": {
+      "position": 10339,
+      "last_position_time": 1777273477.650178,
+      "file_size": 10339
     }
   },
-  "last_scan": "2026-04-27T03:00:14.215911+00:00"
+  "last_scan": "2026-04-27T07:04:37.650194+00:00"
 }

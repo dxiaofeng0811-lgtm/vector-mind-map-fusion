@@ -255,25 +255,53 @@ class SpreadingActivationRecall:
         return activations
 
     def apply_dynamic_priority(self, activations: dict[str, float]) -> dict[str, float]:
-        """Dynamic priority 加权（从 InfinityDB 读取）"""
-        neurons = self.infinitydb.get_neurons(list(activations.keys()))
-        for nid, neuron in neurons.items():
-            priority = neuron.get("priority", 3)
-            activations[nid] = activations.get(nid, 0.0) * (1.0 + (priority - 3) * 0.1)
+        """Dynamic priority 加权（从 Brain.db 读取 priority）"""
+        self.connect()
+        if not self._conn:
+            return activations
+        try:
+            ids = list(activations.keys())
+            placeholders = ",".join("?" * len(ids))
+            cursor = self._conn.execute(
+                f"SELECT id, priority FROM neurons WHERE id IN ({placeholders})",
+                ids
+            )
+            priority_map = {row[0]: row[1] for row in cursor.fetchall()}
+            for nid, act in activations.items():
+                priority = priority_map.get(nid, 3)
+                activations[nid] = act * (1.0 + (priority - 3) * 0.1)
+        except Exception as e:
+            print(f"[Recall] Dynamic priority 加权失败: {e}")
         return activations
 
     def fetch_neurons(self, neuron_ids: list[str]) -> list[dict]:
-        """获取 neurons 详情（从 InfinityDB 读取）"""
-        neurons = self.infinitydb.get_neurons(neuron_ids)
-        result = []
-        for nid, neuron in neurons.items():
-            neuron["id"] = nid
-            neuron.pop("neighbors", None)
-            result.append(neuron)
-        return result
+        """获取 neurons 详情（从 Brain.db 读取）"""
+        self.connect()
+        if not self._conn or not neuron_ids:
+            return []
+        try:
+            placeholders = ",".join("?" * len(neuron_ids))
+            cursor = self._conn.execute(f"""
+                SELECT id, content, memory_type, priority, tier, abstraction_level
+                FROM neurons WHERE id IN ({placeholders})
+            """, neuron_ids)
+            return [
+                {
+                    "id": row[0],
+                    "content": row[1],
+                    "memory_type": row[2],
+                    "priority": row[3],
+                    "tier": row[4],
+                    "abstraction_level": row[5],
+                }
+                for row in cursor.fetchall()
+            ]
+        except Exception as e:
+            print(f"[Recall] fetch_neurons 失败: {e}")
+            return []
 
     def load_recall_config(self) -> dict:
-        """从 InfinityDB 加载 recall_config"""
+        """从 InfinityDB 加载 recall_config（fallback 到默认）"""
         config = self.infinitydb.get_config()
         return config if config else DEFAULT_RECALL_CONFIG
 
@@ -287,26 +315,24 @@ class SpreadingActivationRecall:
         min_score: float = 0.3,
     ) -> list[dict]:
         """
-        主 recall 函数（并行搜索）
-
-        ① query encoding
-        ② 并行搜索（向量 HNSW + 关键词）→ 合并种子
-        ③ spreading activation
-        ④ dynamic priority 加权
-        ⑤ tier/type 过滤
-        ⑥ top-k 返回
+        主 recall 函数（旧双写模式）：
+        1. query encoding → hnsw 种子（k=10）
+        2. keyword seeds 合并（max，不叠加）
+        3. spreading activation
+        4. dynamic priority 加权（Brain.db）
+        5. tier/type 过滤
+        6. top-k 返回（Brain.db fetch）
         """
         # Step 0: 向量编码
         if query_vector is None:
             encoder = OllamaEncoder()
             query_vector = encoder.encode(query)
 
-        # Step 1: 并行搜索（Path1 + Path2）
-        vector_seeds = self.get_seeds_by_hnsw(query_vector, k=50)
-        keyword_seeds = self.get_seeds_by_keyword(query, k=50)
-
-        # 合并两个路径
-        seed_activations = self.merge_seeds(vector_seeds, keyword_seeds)
+        # Step 1: HNSW 种子 + keyword 合并（max，不叠加）
+        seed_activations = self.get_seeds_by_hnsw(query_vector, k=10)
+        keyword_seeds = self.get_seeds_by_keyword(query, k=10)
+        for nid, score in keyword_seeds.items():
+            seed_activations[nid] = max(seed_activations.get(nid, 0.0), score)
 
         if not seed_activations:
             print("[Recall] 无种子节点")
@@ -341,14 +367,7 @@ class SpreadingActivationRecall:
 
         # Step 5: 排序 + top-k
         results.sort(key=lambda x: x["activation_score"], reverse=True)
-        top_results = results[:top_k]
-
-        # Step 6: 更新 access_count / last_accessed / tier（warm/cold 分级）
-        if top_results:
-            recalled_ids = [n["id"] for n in top_results]
-            self.infinitydb.update_access(recalled_ids)
-
-        return top_results
+        return results[:top_k]
 
 
 def fusion_recall(
@@ -359,21 +378,21 @@ def fusion_recall(
     min_score: float = 0.3,
 ) -> list[dict]:
     """
-    对外暴露的 recall 接口。
-    用法：
-        results = fusion_recall("dxiaofeng 的项目", top_k=10)
+    对外暴露的 recall 接口（旧双写模式）
     """
     recall = SpreadingActivationRecall()
+    recall.connect()
     recall.recall_config = recall.load_recall_config()
-
-    results = recall.recall(
-        query=query,
-        top_k=top_k,
-        tier_filter=tier,
-        memory_type_filter=memory_type,
-        min_score=min_score,
-    )
-    return results
+    try:
+        return recall.recall(
+            query=query,
+            top_k=top_k,
+            tier_filter=tier,
+            memory_type_filter=memory_type,
+            min_score=min_score,
+        )
+    finally:
+        recall.close()
 
 
 if __name__ == "__main__":
