@@ -254,6 +254,7 @@ class L3Processor:
                     })
 
         # 收集 inferred relations
+        relations_count = 0
         for rel in inferred_relations:
             from_id = rel.get("from")
             to_id = rel.get("to")
@@ -266,12 +267,14 @@ class L3Processor:
                     "weight": weight,
                     "rel_type": rel_type,
                 })
+                relations_count += 1
 
         print(f"[L3] 收集 neurons: {written_count}, schemas: {schema_count}")
 
         return {
             "neurons_written": written_count,
             "schemas_written": schema_count,
+            "relations_written": relations_count,
             "written_ids": written_ids,
             "all_neurons": written_ids,
         }
