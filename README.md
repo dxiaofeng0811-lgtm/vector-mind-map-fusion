@@ -247,3 +247,7 @@ vector-mind-map-fusion/
 - [L3 检索流程](docs/l3_flow.md)
 - [Recall API](docs/recall_api.md)
 - [修复清单](docs/fixes.md)
+
+## Download History
+
+[![Download History](https://skill-history.com/chart/dxiaofeng0811-lgtm/vector-mind-map-fusion.svg)](https://skill-history.com/dxiaofeng0811-lgtm/vector-mind-map-fusion)
